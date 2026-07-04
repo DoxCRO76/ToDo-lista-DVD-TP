@@ -549,7 +549,7 @@ async function loadState() {
       const obj = snap.data();
       lists = Array.isArray(obj.lists) ? obj.lists : [];
       data  = obj.data && typeof obj.data === 'object' ? obj.data : {};
-      if (!lists.length) { initDemo(); return; }
+      if (!lists.length) { initDemo(true); return; }
       nListId = lists.length ? Math.max(...lists.map(l=>l.id))+1 : 1;
       const all = Object.values(data).flat();
       nTaskId = all.length ? Math.max(...all.map(t=>t.id))+1 : 1;
@@ -558,14 +558,18 @@ async function loadState() {
       activeList = lists[0]?.id ?? null;
       return;
     }
-    initDemo();
+    initDemo(true);
   } catch (e) {
     console.error('Greška pri učitavanju iz Firebase:', e);
-    initDemo();
+    // Sigurnosna mjera: kod greške (npr. privremeni prekid mreže) prikaži
+    // demo podatke LOKALNO, ali ih NE spremaj automatski - da slučajno ne
+    // prepišemo prave podatke u bazi ako je greška samo privremena.
+    initDemo(false);
+    setSaveStatus('error');
   }
 }
 
-function initDemo() {
+function initDemo(persist) {
   lists = [{ id:1, name:'DVD Tugonica-Podgrađe', color:'#EF4444', desc:'Popis zadataka za redovito održavanje opreme, vozila i aktivnosti društva.' }];
   data = {
     1: [
@@ -577,7 +581,7 @@ function initDemo() {
     ],
   };
   nListId = 2; nTaskId = 5; nSubId = 2; activeList = 1;
-  saveState();
+  if (persist) saveState();
 }
 
 function saveState() {
@@ -1146,10 +1150,18 @@ function checkPassword() {
     });
 }
 
-auth.onAuthStateChanged((user) => {
+let resolveDataReady;
+const dataReadyPromise = new Promise(resolve => { resolveDataReady = resolve; });
+
+auth.onAuthStateChanged(async (user) => {
   const pwView = document.getElementById('password-view');
   if (user) {
     if (pwView) pwView.style.display = 'none';
+    document.getElementById('task-list').innerHTML = '<div class="empty">Učitavanje…</div>';
+    await Promise.all([loadState(), loadFontSize()]);
+    renderDropdown();
+    renderTasks();
+    resolveDataReady();
     goHome();
   } else {
     if (pwView) pwView.style.display = '';
@@ -1248,12 +1260,6 @@ function renderHomeReminders() {
 }
 
 /* ── Init ── */
-const dataReadyPromise = (async () => {
-  document.getElementById('task-list').innerHTML = '<div class="empty">Učitavanje…</div>';
-  await Promise.all([loadState(), loadFontSize()]);
-  renderDropdown();
-  renderTasks();
-})();
 (function initPasswordScreen() {
   setTimeout(() => { const el = document.getElementById('pw-input'); if (el) el.focus(); }, 50);
 })();
