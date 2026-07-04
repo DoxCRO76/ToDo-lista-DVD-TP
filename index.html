@@ -7,6 +7,7 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-auth-compat.js"></script>
 <style>
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
@@ -328,7 +329,7 @@ body {
     <input class="inp" type="password" id="pw-input" placeholder="Lozinka..." style="width:100%;height:42px;text-align:center;font-size:1rem;"
       onkeydown="if(event.key==='Enter'){event.preventDefault();checkPassword();}" />
     <div id="pw-error" style="color:var(--p-critical);font-size:0.8125rem;margin-top:.5rem;min-height:1.1rem;"></div>
-    <button class="btn-save" onclick="checkPassword()" style="width:100%;margin-top:.75rem;">Uđi</button>
+    <button class="btn-save" id="pw-submit-btn" onclick="checkPassword()" style="width:100%;margin-top:.75rem;">Uđi</button>
   </div>
 
   <!-- Home screen: podsjetnici sa svih lista -->
@@ -372,6 +373,9 @@ body {
       <option value="medium" selected>Srednji tekst</option>
       <option value="large">Veliki tekst</option>
     </select>
+    <button class="icon-btn" onclick="logout()" title="Odjava" aria-label="Odjava">
+      <svg width="14" height="14" viewBox="0 0 16 16" fill="none"><path d="M6 2H3a1 1 0 0 0-1 1v10a1 1 0 0 0 1 1h3M11 11l3-3-3-3M14 8H6" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg>
+    </button>
   </div>
 
   <div id="list-panel"></div>
@@ -1115,21 +1119,42 @@ async function loadFontSize() {
 }
 
 /* ── Password + Home screen ── */
-const APP_PASSWORD = '193';
+const auth = firebase.auth();
+const LOGIN_EMAIL = 'avis.anita@outlook.com';
 
 function checkPassword() {
-  const inp = document.getElementById('pw-input');
+  const pwInp = document.getElementById('pw-input');
   const err = document.getElementById('pw-error');
-  if (inp.value === APP_PASSWORD) {
-    err.textContent = '';
-    document.getElementById('password-view').style.display = 'none';
+  const btn = document.getElementById('pw-submit-btn');
+  const pw = pwInp.value;
+  if (!pw) {
+    err.textContent = 'Upiši lozinku.';
+    return;
+  }
+  err.textContent = '';
+  btn.disabled = true; btn.textContent = 'Prijava…';
+  auth.signInWithEmailAndPassword(LOGIN_EMAIL, pw)
+    .then(() => {
+      // onAuthStateChanged (ispod) preuzima prikaz home ekrana
+    })
+    .catch((e) => {
+      btn.disabled = false; btn.textContent = 'Uđi';
+      pwInp.value = '';
+      pwInp.focus();
+      if (e.code === 'auth/invalid-email') err.textContent = 'Neispravan format e-maila.';
+      else err.textContent = 'Pogrešan e-mail ili lozinka.';
+    });
+}
+
+auth.onAuthStateChanged((user) => {
+  const pwView = document.getElementById('password-view');
+  if (user) {
+    if (pwView) pwView.style.display = 'none';
     goHome();
   } else {
-    err.textContent = 'Pogrešna lozinka.';
-    inp.value = '';
-    inp.focus();
+    if (pwView) pwView.style.display = '';
   }
-}
+});
 
 async function goHome() {
   document.getElementById('app-view').style.display = 'none';
@@ -1141,6 +1166,16 @@ async function goHome() {
 function goToApp() {
   document.getElementById('home-view').style.display = 'none';
   document.getElementById('app-view').style.display = 'block';
+}
+
+function logout() {
+  auth.signOut();
+  document.getElementById('home-view').style.display = 'none';
+  document.getElementById('app-view').style.display = 'none';
+  document.getElementById('password-view').style.display = '';
+  const pwInp = document.getElementById('pw-input');
+  if (pwInp) pwInp.value = '';
+  setTimeout(() => { if (pwInp) pwInp.focus(); }, 30);
 }
 
 function openReminderTask(listId, taskId) {
