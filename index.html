@@ -1,0 +1,1364 @@
+<!DOCTYPE html>
+<html lang="hr">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>ToDo — DVD Tugonica-Podgrađe</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore-compat.js"></script>
+<style>
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+:root {
+  --bg: #2B4C7E;
+  --surface: #FFFFFF;
+  --border: #C5D3E8;
+  --border-strong: #94A9C8;
+  --text: #1A1917;
+  --text-muted: #6B6960;
+  --text-faint: #A09D95;
+
+  --p-critical: #D63B3B;
+  --p-critical-bg: #FEF2F2; --p-critical-border: #FECACA; --p-critical-text: #7F1D1D;
+  --p-high: #C97A1A;
+  --p-high-bg: #FFFBEB;    --p-high-border: #FDE68A;    --p-high-text: #713F12;
+  --p-mid: #2563EB;
+  --p-mid-bg: #EFF6FF;     --p-mid-border: #BFDBFE;     --p-mid-text: #1E3A8A;
+  --p-low: #71717A;
+  --p-low-bg: #F4F4F5;     --p-low-border: #D4D4D8;     --p-low-text: #3F3F46;
+  --soon-text: #92400E;
+
+  --accent: #1A1917;
+  --r-sm: 6px; --r-md: 10px; --r-lg: 14px;
+  --shadow: 0 1px 3px rgba(0,0,0,.06);
+  --shadow-modal: 0 8px 32px rgba(0,0,0,.18);
+  --shadow-drop: 0 4px 16px rgba(0,0,0,.12);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #141412; --surface: #1E1D1B; --border: #2E2D29; --border-strong: #44433E;
+    --text: #F0EFE9; --text-muted: #9B9891; --text-faint: #5C5B55;
+    --p-critical: #F87171; --p-critical-bg: #2A1515; --p-critical-border: #7F2020; --p-critical-text: #FCA5A5;
+    --p-high: #FBBF24;    --p-high-bg: #271E0A;    --p-high-border: #78480A;    --p-high-text: #FDE68A;
+    --p-mid: #60A5FA;     --p-mid-bg: #0D1A35;     --p-mid-border: #1E3A8A;     --p-mid-text: #BFDBFE;
+    --p-low: #A1A1AA;     --p-low-bg: #1C1C1E;     --p-low-border: #3F3F46;     --p-low-text: #D4D4D8;
+    --soon-text: #FDE68A;
+  }
+}
+
+html { font-size: 16px; }
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+  font-size:1rem;
+  line-height: 1.45;
+  min-height: 100vh;
+}
+
+.app { padding: 1.25rem 1.5rem 4rem; }
+
+/* ── Header ── */
+.header { display: flex; align-items: center; gap: 10px; margin-bottom: 1.1rem; flex-wrap: wrap; }
+.header .filter-bar { flex: 1; }
+.new-btn {
+  height: 34px; padding: 0 14px;
+  background: var(--accent); color: #fff; border: none;
+  border-radius: var(--r-sm); font-size:0.8125rem; font-weight: 500;
+  cursor: pointer; display: flex; align-items: center; gap: 6px;
+  transition: opacity .15s; white-space: nowrap; flex-shrink: 0;
+}
+.new-btn:hover { opacity: .82; }
+.new-btn:active { transform: scale(.98); }
+
+/* ── Layout: list bar + main ── */
+.list-bar { display: flex; align-items: center; gap: 6px; margin-bottom: .5rem; }
+.list-edit-panel {
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: var(--r-md); box-shadow: var(--shadow);
+  padding: 10px; margin-bottom: .85rem;
+}
+
+.active-list-hdr { margin-bottom: .6rem; }
+.active-list-hdr .dot { width: 11px; height: 11px; border-radius: 50%; flex-shrink: 0; }
+.active-list-hdr .name { font-size:1.0625rem; font-weight: 600; color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.active-list-desc { font-size:0.8125rem; color: var(--text-muted); margin: 4px 0 0 19px; line-height: 1.45; white-space: pre-line; }
+
+.drop-new {
+  display: flex; gap: 5px; padding: 4px 2px 2px;
+}
+.drop-new-inp {
+  flex: 1; min-width: 0; height: 30px; padding: 0 8px;
+  border: 1px solid var(--border); border-radius: var(--r-sm);
+  background: var(--bg); color: var(--text);
+  font-size:0.8125rem; outline: none; transition: border-color .12s;
+}
+.drop-new-inp:focus { border-color: var(--border-strong); }
+.drop-new-inp::placeholder { color: var(--text-faint); }
+.drop-new-btn {
+  height: 30px; width: 30px; flex-shrink: 0;
+  background: var(--accent); color: #fff; border: none;
+  border-radius: var(--r-sm); font-size:1.125rem; line-height: 1;
+  cursor: pointer; display: flex; align-items: center; justify-content: center;
+  transition: opacity .14s;
+}
+.drop-new-btn:hover { opacity: .82; }
+
+/* ── Filter ── */
+.filter-bar { display: flex; gap: 4px; flex-wrap: wrap; }
+.f-btn { padding: 4px 11px; border: 1px solid var(--border); border-radius: 99px; background: transparent; color: var(--text-muted); font-size:0.8125rem; cursor: pointer; transition: all .12s; }
+.f-btn:hover { background: var(--surface); color: var(--text); }
+.f-btn.active { background: var(--accent); color: #fff; border-color: var(--accent); font-weight: 500; }
+
+/* ── Section label ── */
+.section-lbl { font-size:0.6875rem; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; color: var(--text-faint); margin: 1rem 0 4px 2px; display: flex; align-items: center; gap: 6px; }
+.section-lbl::after { content:''; flex:1; height:1px; background: var(--border); }
+
+/* ── Task row ── */
+.task {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-left: 3px solid var(--border);
+  border-radius: var(--r-md);
+  margin-bottom: 4px;
+  box-shadow: var(--shadow);
+  display: flex; align-items: stretch;
+  min-height: 42px;
+  transition: opacity .15s, border-color .12s;
+  overflow: hidden;
+}
+.task:hover { border-color: var(--border-strong); }
+.task.done { opacity: .4; }
+.task[data-pri="kritično"], .subtask-list[data-pri="kritično"] { border-left-color: var(--p-critical); }
+.task[data-pri="visok"], .subtask-list[data-pri="visok"]       { border-left-color: var(--p-high); }
+.task[data-pri="srednji"], .subtask-list[data-pri="srednji"]   { border-left-color: var(--p-mid); }
+.task[data-pri="nizak"], .subtask-list[data-pri="nizak"]       { border-left-color: var(--p-low); }
+
+.task-wrap { margin-bottom: 4px; }
+.task-wrap .task { margin-bottom: 0; }
+.task-wrap .task.has-sub { border-radius: var(--r-md) var(--r-md) 0 0; }
+.subtask-list {
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-top: none;
+  border-left: 3px solid var(--border);
+  border-radius: 0 0 var(--r-md) var(--r-md);
+  padding: 6px 12px 7px 20px;
+  display: flex; flex-direction: column; gap: 4px;
+}
+.subtask-row { display: flex; align-items: center; gap: 7px; font-size:0.7812rem; color: var(--text-muted); }
+.subtask-status {
+  width: 16px; height: 16px; flex-shrink: 0; padding: 0;
+  border-radius: 50%; border: 1.5px solid var(--border-strong);
+  background: transparent; cursor: pointer;
+  display: flex; align-items: center; justify-content: center;
+  transition: background .12s, border-color .12s, color .12s;
+}
+.subtask-status.status-todo     { color: transparent; }
+.subtask-status.status-progress { border-color: #D97706; color: #D97706; }
+.subtask-status.status-done     { border-color: #16803C; background: #16803C; color: #fff; }
+@media (prefers-color-scheme: dark) {
+  .subtask-status.status-progress { border-color: #FBBF24; color: #FBBF24; }
+  .subtask-status.status-done     { border-color: #4ADE80; background: #4ADE80; color: #0B1F12; }
+}
+.subtask-row.is-done .subtask-text { color: var(--text-faint); }
+.subtask-text { flex: 1; min-width: 0; overflow-wrap: break-word; color: var(--text); font-size:0.9375rem; }
+.subtask-meta { color: var(--text-faint); white-space: nowrap; flex-shrink: 0; }
+.subtask-date { color: #0284C7; white-space: nowrap; flex-shrink: 0; }
+@media (prefers-color-scheme: dark) {
+  .subtask-date { color: #38BDF8; }
+}
+.subtask-edit {
+  background: none; border: none; cursor: pointer;
+  color: var(--text-faint); padding: 2px; border-radius: 4px;
+  display: flex; align-items: center; flex-shrink: 0; transition: color .1s;
+}
+.subtask-edit:hover { color: var(--text); }
+
+.subtask-add-row { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 2px; }
+.subtask-add-link {
+  display: flex; align-items: center; gap: 5px;
+  background: none; border: none; cursor: pointer;
+  color: var(--text-faint); font-size:0.75rem; padding: 2px 0;
+  transition: color .1s;
+}
+.subtask-add-link:hover { color: var(--text); }
+.subtask-add-link svg { flex-shrink: 0; }
+
+.task-chk { width: 17px; height: 17px; cursor: pointer; flex-shrink: 0; accent-color: var(--accent); margin: 0 10px; align-self: center; }
+
+.task-name {
+  font-size:0.875rem; font-weight: 500; color: #16803C;
+  flex: 0 0 220px; min-width: 0;
+  padding: 8px 12px 8px 0; align-self: center; line-height: 1.35;
+  display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
+}
+.task.done .task-name { text-decoration: line-through; color: var(--text-faint); }
+@media (prefers-color-scheme: dark) {
+  .task-name { color: #4ADE80; }
+}
+
+.task-sep { width: 1px; background: var(--border); flex-shrink: 0; align-self: stretch; }
+
+.task-desc {
+  font-size:0.9375rem; color: var(--text);
+  flex: 1 1 0; min-width: 0;
+  padding: 8px 12px; align-self: center; line-height: 1.35;
+  display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
+}
+
+.task-dates {
+  flex-shrink: 0; display: flex; flex-direction: column; justify-content: center; gap: 2px;
+  padding: 8px 10px; min-width: 118px; align-self: center;
+}
+.task-date { font-size:0.75rem; color: #0284C7; white-space: nowrap; display: flex; align-items: center; gap: 3px; }
+.task-date svg { flex-shrink: 0; }
+.task-date.overdue { color: var(--p-critical); font-weight: 600; }
+.task-date.soon    { color: var(--soon-text); font-weight: 500; }
+.task-date.ok      { color: #16803C; font-weight: 500; }
+
+@media (prefers-color-scheme: dark) {
+  .task-date.ok { color: #4ADE80; }
+  .task-date { color: #38BDF8; }
+}
+
+.task-actions { display: flex; flex-direction: column; align-items: flex-end; gap: 4px; flex-shrink: 0; padding: 6px 6px 6px 0; margin-left: auto; }
+.task-actions-top { display: flex; align-items: center; gap: 2px; }
+
+.pri-inline {
+  appearance: none; -webkit-appearance: none;
+  border: 1px solid var(--border); border-radius: var(--r-sm);
+  background: var(--bg); color: var(--text);
+  font-size:0.75rem; padding: 2px 5px; cursor: pointer; outline: none;
+  height: 24px; line-height: 1; transition: border-color .12s;
+}
+.pri-inline:hover { border-color: var(--border-strong); }
+.pri-inline[data-pri="kritično"] { background: var(--p-critical-bg); color: var(--p-critical-text); border-color: var(--p-critical-border); }
+.pri-inline[data-pri="visok"]    { background: var(--p-high-bg);     color: var(--p-high-text);     border-color: var(--p-high-border); }
+.pri-inline[data-pri="srednji"]  { background: var(--p-mid-bg);      color: var(--p-mid-text);      border-color: var(--p-mid-border); }
+.pri-inline[data-pri="nizak"]    { background: var(--p-low-bg);      color: var(--p-low-text);      border-color: var(--p-low-border); }
+
+.icon-btn {
+  background: none; border: none; cursor: pointer;
+  color: var(--text-faint); padding: 4px; border-radius: var(--r-sm);
+  display: flex; align-items: center; justify-content: center;
+  transition: color .12s, background .12s;
+}
+.icon-btn:hover     { color: var(--text); background: var(--bg); }
+.icon-btn.del:hover { color: var(--p-critical); background: var(--p-critical-bg); }
+
+/* ── Empty ── */
+.empty { text-align: center; padding: 3rem 1rem; color: var(--text-muted); font-size:0.875rem; }
+
+/* ── Footer ── */
+.footer { margin-top: 1rem; display: flex; justify-content: space-between; align-items: center; }
+.footer-txt { font-size:0.75rem; color: var(--text-faint); }
+.clear-btn { font-size:0.75rem; color: var(--text-muted); background: none; border: none; cursor: pointer; padding: 4px 8px; border-radius: var(--r-sm); transition: background .12s; }
+.clear-btn:hover { background: var(--border); color: var(--text); }
+
+/* ── Modals ── */
+.overlay {
+  position: fixed; inset: 0; background: rgba(0,0,0,.45);
+  display: flex; align-items: center; justify-content: center;
+  z-index: 100; padding: 1rem;
+  opacity: 0; pointer-events: none; transition: opacity .16s;
+}
+.overlay.open { opacity: 1; pointer-events: all; }
+.modal {
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: var(--r-lg); box-shadow: var(--shadow-modal);
+  width: 100%; max-width: 460px; padding: 1.4rem;
+  transform: translateY(10px); transition: transform .16s;
+}
+.overlay.open .modal { transform: translateY(0); }
+.modal-hdr { display: flex; align-items: center; justify-content: space-between; margin-bottom: 1.1rem; }
+.modal-title { font-size:1rem; font-weight: 600; }
+.modal-x { background: none; border: none; cursor: pointer; color: var(--text-muted); padding: 3px; border-radius: var(--r-sm); display: flex; }
+.modal-x:hover { color: var(--text); background: var(--bg); }
+
+.form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 10px; }
+.form-row.single { grid-template-columns: 1fr; }
+.form-field { display: flex; flex-direction: column; gap: 4px; }
+.lbl { font-size:0.6875rem; font-weight: 600; color: var(--text-muted); text-transform: uppercase; letter-spacing: .04em; }
+.inp, .sel, .txta {
+  height: 36px; padding: 0 10px;
+  border: 1px solid var(--border); border-radius: var(--r-sm);
+  background: var(--bg); color: var(--text);
+  font-size:0.875rem; font-family: inherit; outline: none; transition: border-color .14s;
+}
+.inp:focus, .sel:focus, .txta:focus { border-color: var(--border-strong); }
+.inp::placeholder, .txta::placeholder { color: var(--text-faint); }
+.txta { height: auto; min-height: 60px; padding: 8px 10px; resize: vertical; line-height: 1.5; }
+
+.form-actions { display: flex; gap: 8px; justify-content: flex-end; margin-top: 1rem; }
+.btn-cancel { padding: 0 14px; height: 36px; border: 1px solid var(--border); border-radius: var(--r-sm); background: transparent; color: var(--text-muted); font-size:0.875rem; cursor: pointer; }
+.btn-cancel:hover { background: var(--bg); }
+.btn-save { padding: 0 18px; height: 36px; background: var(--accent); color: #fff; border: none; border-radius: var(--r-sm); font-size:0.875rem; font-weight: 500; cursor: pointer; }
+.btn-save:hover { opacity: .82; }
+.btn-danger { padding: 0 18px; height: 36px; background: var(--p-critical); color: #fff; border: none; border-radius: var(--r-sm); font-size:0.875rem; font-weight: 500; cursor: pointer; }
+
+.confirm-modal { max-width: 360px; }
+.confirm-modal p { font-size:0.875rem; color: var(--text-muted); margin-bottom: 1.2rem; line-height: 1.5; }
+
+@media (max-width: 600px) {
+  .task-desc { display: none; }
+  .task-sep  { display: none; }
+  .task-name { flex: 1; }
+  .form-row  { grid-template-columns: 1fr; }
+}
+
+@media (max-width: 480px) {
+  .task { flex-wrap: wrap; }
+  .task-dates { padding: 4px 10px 4px 0; }
+  .task-actions { padding: 4px 6px 6px 0; }
+  .list-bar { max-width: 100% !important; flex: 1 1 100%; }
+}
+</style>
+</head>
+<body>
+<div class="app">
+
+  <!-- Password screen -->
+  <div id="password-view" style="max-width:340px;margin:15vh auto 0;text-align:center;">
+    <div style="width:56px;height:56px;border-radius:14px;background:var(--accent);display:flex;align-items:center;justify-content:center;font-size:26px;margin:0 auto 1rem;">🚒</div>
+    <div style="font-size:1.125rem;font-weight:700;color:var(--text);margin-bottom:.25rem;">DVD Tugonica-Podgrađe</div>
+    <div style="font-size:0.8125rem;color:var(--text-faint);margin-bottom:1.4rem;">Unesi lozinku za pristup</div>
+    <input class="inp" type="password" id="pw-input" placeholder="Lozinka..." style="width:100%;height:42px;text-align:center;font-size:1rem;"
+      onkeydown="if(event.key==='Enter'){event.preventDefault();checkPassword();}" />
+    <div id="pw-error" style="color:var(--p-critical);font-size:0.8125rem;margin-top:.5rem;min-height:1.1rem;"></div>
+    <button class="btn-save" onclick="checkPassword()" style="width:100%;margin-top:.75rem;">Uđi</button>
+  </div>
+
+  <!-- Home screen: podsjetnici sa svih lista -->
+  <div id="home-view" style="display:none;max-width:640px;margin:0 auto;">
+    <div style="display:flex;align-items:center;gap:12px;margin:1rem 0 1.4rem;">
+      <div style="width:40px;height:40px;border-radius:10px;background:var(--accent);display:flex;align-items:center;justify-content:center;font-size:1.1875rem;flex-shrink:0;">🚒</div>
+      <div style="min-width:0;">
+        <div style="font-size:1.125rem;font-weight:700;color:var(--text);line-height:1.2;">DVD Tugonica-Podgrađe</div>
+        <div style="font-size:0.75rem;color:var(--text-faint);">Podsjetnici</div>
+      </div>
+      <button class="new-btn" style="margin-left:auto;background:var(--surface);color:var(--text);border:1px solid var(--border);flex-shrink:0;text-transform:uppercase;letter-spacing:.03em;" onclick="goToApp()">Sve liste →</button>
+    </div>
+    <div id="home-reminders"></div>
+  </div>
+
+  <!-- Glavna aplikacija (liste i zadaci) -->
+  <div id="app-view" style="display:none;">
+
+  <!-- Brand header -->
+  <div style="display:flex;align-items:center;gap:12px;margin-bottom:1rem;flex-wrap:wrap;">
+    <div style="width:40px;height:40px;border-radius:10px;background:var(--accent);display:flex;align-items:center;justify-content:center;font-size:1.1875rem;flex-shrink:0;">🚒</div>
+    <div style="min-width:0;">
+      <div style="font-size:1.125rem;font-weight:700;color:var(--text);line-height:1.2;">DVD Tugonica-Podgrađe</div>
+      <div style="font-size:0.75rem;color:var(--text-faint);">Popis zadataka i prioriteta</div>
+    </div>
+    <div class="list-bar" style="margin-bottom:0;max-width:320px;margin-left:auto;">
+      <span style="font-size:0.8125rem;font-weight:600;color:var(--text-muted);flex-shrink:0;text-transform:uppercase;letter-spacing:.03em;">Liste</span>
+      <select id="list-select" class="sel" onchange="switchList(parseInt(this.value))" aria-label="Odaberi listu" style="flex:1;min-width:0;"></select>
+      <button class="icon-btn" onclick="startEditList(activeList,event)" title="Uredi listu" aria-label="Uredi listu">
+        <svg width="13" height="13" viewBox="0 0 15 15" fill="none"><path d="M10.5 2.5l2 2L5 12H3v-2L10.5 2.5z" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round"/></svg>
+      </button>
+      <button class="icon-btn" onclick="toggleAddList(event)" title="Nova lista" aria-label="Nova lista">
+        <svg width="13" height="13" viewBox="0 0 14 14" fill="none"><path d="M7 1v12M1 7h12" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
+      </button>
+    </div>
+    <span id="save-status" style="font-size:0.75rem;color:var(--text-faint);white-space:nowrap;"></span>
+    <button class="new-btn" style="background:var(--surface);color:var(--text);border:1px solid var(--border);" onclick="goHome()" title="Natrag na podsjetnike">← Podsjetnici</button>
+    <select id="font-size-sel" onchange="setFontSize(this.value)" aria-label="Veličina teksta"
+      style="height:30px;padding:0 8px;border:1px solid var(--border);border-radius:var(--r-sm);background:var(--surface);color:var(--text);font-size:0.8125rem;cursor:pointer;outline:none;flex-shrink:0;">
+      <option value="small">Mali tekst</option>
+      <option value="medium" selected>Srednji tekst</option>
+      <option value="large">Veliki tekst</option>
+    </select>
+  </div>
+
+  <div id="list-panel"></div>
+
+  <div class="main">
+
+    <div class="active-list-hdr" id="active-list-hdr"></div>
+
+      <!-- Header -->
+      <div class="header">
+
+        <!-- Filters -->
+        <div class="filter-bar">
+          <button class="f-btn active" data-f="sve" onclick="setFilter('sve')">Sve</button>
+          <button class="f-btn" data-f="aktivno" onclick="setFilter('aktivno')">Aktivno</button>
+          <button class="f-btn" data-f="završeno" onclick="setFilter('završeno')">Završeno</button>
+        </div>
+
+        <!-- Sort -->
+        <select id="sort-sel" onchange="setSort(this.value)" style="height:34px;padding:0 10px;border:1px solid var(--border);border-radius:var(--r-sm);background:var(--surface);color:var(--text);font-size:0.8125rem;cursor:pointer;outline:none;flex-shrink:0;">
+          <option value="prioritet">— Bez sortiranja</option>
+          <option value="unos">Datum unosa</option>
+          <option value="rok">Datum roka</option>
+        </select>
+
+        <!-- New task -->
+        <button class="new-btn" style="background:#E5E7EB;color:#111827;" onclick="openModal()">
+          <svg width="13" height="13" viewBox="0 0 14 14" fill="none" aria-hidden="true"><path d="M7 1v12M1 7h12" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
+          Novi zadatak
+        </button>
+        <button class="new-btn" style="background:var(--surface);color:var(--text);border:1px solid var(--border);" onclick="exportExcel()" title="Izvezi sve liste u Excel">
+          <svg width="13" height="13" viewBox="0 0 14 14" fill="none" aria-hidden="true"><path d="M7 1v9M4 7l3 3 3-3M2 11h10" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          Export
+        </button>
+      </div>
+
+      <div id="task-list"></div>
+      <div class="empty" id="empty" style="display:none">Nema zadataka.</div>
+
+      <div class="footer">
+        <span class="footer-txt" id="footer-txt"></span>
+        <button class="clear-btn" id="clear-btn" style="display:none" onclick="clearDone()">Obriši završene</button>
+      </div>
+
+    </div>
+  </div>
+</div>
+
+<!-- Task modal -->
+<div class="overlay" id="overlay" onclick="ovClick(event)">
+  <div class="modal" role="dialog" aria-modal="true">
+    <div class="modal-hdr">
+      <span class="modal-title" id="modal-title">Novi zadatak</span>
+      <button class="modal-x" onclick="closeModal()" aria-label="Zatvori">
+        <svg width="17" height="17" viewBox="0 0 17 17" fill="none"><path d="M3 3l11 11M14 3L3 14" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>
+      </button>
+    </div>
+    <div class="form-row single">
+      <div class="form-field">
+        <label class="lbl" for="f-name">Naziv *</label>
+        <input class="inp" type="text" id="f-name" placeholder="Naziv zadatka..." />
+      </div>
+    </div>
+    <div class="form-row single">
+      <div class="form-field">
+        <label class="lbl" for="f-desc">Opis</label>
+        <textarea class="txta" id="f-desc" placeholder="Kratki opis..." style="min-height:90px;"></textarea>
+      </div>
+    </div>
+    <div class="form-row">
+      <div class="form-field">
+        <label class="lbl" for="f-list">Lista</label>
+        <select class="sel" id="f-list"></select>
+      </div>
+      <div class="form-field">
+        <label class="lbl" for="f-pri">Prioritet</label>
+        <select class="sel" id="f-pri">
+          <option value="kritično">🔴 Kritično</option>
+          <option value="visok">🟠 Visok</option>
+          <option value="srednji" selected>🔵 Srednji</option>
+          <option value="nizak">⚪ Nizak</option>
+        </select>
+      </div>
+    </div>
+    <div class="form-row">
+      <div class="form-field">
+        <label class="lbl" for="f-due">Datum roka</label>
+        <input class="inp" type="date" id="f-due" />
+      </div>
+      <div class="form-field">
+        <label class="lbl" for="f-remind">Podsjeti me</label>
+        <input class="inp" type="date" id="f-remind" />
+      </div>
+      <div class="form-field">
+        <label class="lbl" for="f-created">Datum unosa</label>
+        <input class="inp" type="date" id="f-created" />
+      </div>
+      <div class="form-field">
+        <label class="lbl" for="f-entered-by">Naziv unosa</label>
+        <input class="inp" type="text" id="f-entered-by" placeholder="Tko unosi..." />
+      </div>
+    </div>
+    <div class="form-actions">
+      <button class="btn-danger" id="task-delete-btn" style="display:none;margin-right:auto;" onclick="askDeleteTask()">Obriši</button>
+      <button class="btn-cancel" onclick="closeModal()">Odustani</button>
+      <button class="btn-save" onclick="saveTask()">Spremi</button>
+    </div>
+  </div>
+</div>
+
+<!-- Confirm delete modal -->
+<div class="overlay" id="confirm-overlay" onclick="confirmOvClick(event)">
+  <div class="modal confirm-modal" role="dialog" aria-modal="true">
+    <div class="modal-hdr">
+      <span class="modal-title" id="confirm-title">Obriši</span>
+      <button class="modal-x" onclick="closeConfirm()" aria-label="Zatvori">
+        <svg width="17" height="17" viewBox="0 0 17 17" fill="none"><path d="M3 3l11 11M14 3L3 14" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>
+      </button>
+    </div>
+    <p id="confirm-msg"></p>
+    <div class="form-actions">
+      <button class="btn-cancel" onclick="closeConfirm()">Odustani</button>
+      <button class="btn-danger" onclick="confirmDelete()">Obriši</button>
+    </div>
+  </div>
+</div>
+
+<script>
+const PRI_ORDER = ['kritično','visok','srednji','nizak'];
+const PRI_SEC   = { kritično:'🔴 Krit.', visok:'🟠 Visok', srednji:'🔵 Sred.', nizak:'⚪ Nizak' };
+const PRI_FULL  = { kritično:'🔴 Kritično', visok:'🟠 Visok', srednji:'🔵 Srednji', nizak:'⚪ Nizak' };
+
+const LIST_COLOURS = [
+  '#94A3B8','#64748B',  // siva
+  '#EF4444','#F97316',  // crvena, narančasta
+  '#EAB308','#84CC16',  // žuta, zelena
+  '#10B981','#06B6D4',  // teal, cyan
+  '#3B82F6','#6366F1',  // plava, indigo
+  '#8B5CF6','#EC4899',  // ljubičasta, roza
+  '#F43F5E','#0EA5E9',  // crimson, sky
+];
+let selectedColor = LIST_COLOURS[0];
+
+let lists = [], data = {};
+let nListId = 1, nTaskId = 1, nSubId = 1;
+let activeList = null, filter = 'sve', sort = 'prioritet', editId = null, deleteListId = null, deleteTaskId = null;
+let deleteSubtaskInfo = null;
+let editingListId = null, editingColor = null;
+let addingNewList = false;
+
+/* ── Persistence (trajna pohrana artefakta — dijeljeno između svih korisnika) ── */
+/* ── Firebase (trajna pohrana - dijeljeno sa svima) ── */
+const firebaseConfig = {
+  apiKey: "AIzaSyAMoWOPSkmwEKT8e2vsl4krYZkRxdYe6zE",
+  authDomain: "todo-lista-dvd-tp.firebaseapp.com",
+  projectId: "todo-lista-dvd-tp",
+  storageBucket: "todo-lista-dvd-tp.firebasestorage.app",
+  messagingSenderId: "1013025109938",
+  appId: "1:1013025109938:web:b916362d5d704d1abd16ab"
+};
+firebase.initializeApp(firebaseConfig);
+const db = firebase.firestore();
+const stateDocRef = db.collection('todo').doc('app-state');
+
+let saveTimer = null;
+
+async function loadState() {
+  try {
+    const snap = await stateDocRef.get();
+    if (snap.exists) {
+      const obj = snap.data();
+      lists = Array.isArray(obj.lists) ? obj.lists : [];
+      data  = obj.data && typeof obj.data === 'object' ? obj.data : {};
+      if (!lists.length) { initDemo(); return; }
+      nListId = lists.length ? Math.max(...lists.map(l=>l.id))+1 : 1;
+      const all = Object.values(data).flat();
+      nTaskId = all.length ? Math.max(...all.map(t=>t.id))+1 : 1;
+      const allSubs = all.flatMap(t => Array.isArray(t.subtasks) ? t.subtasks : []);
+      nSubId = allSubs.length ? Math.max(...allSubs.map(s=>s.id))+1 : 1;
+      activeList = lists[0]?.id ?? null;
+      return;
+    }
+    initDemo();
+  } catch (e) {
+    console.error('Greška pri učitavanju iz Firebase:', e);
+    initDemo();
+  }
+}
+
+function initDemo() {
+  lists = [{ id:1, name:'DVD Tugonica-Podgrađe', color:'#EF4444', desc:'Popis zadataka za redovito održavanje opreme, vozila i aktivnosti društva.' }];
+  data = {
+    1: [
+      { id:1, name:'Servis vatrogasnog vozila', desc:'Redoviti godišnji tehnički pregled', pri:'visok', done:false, created:isoToday(), due:isoOff(14) },
+      { id:2, name:'Provjera i punjenje aparata za gašenje', desc:'', pri:'kritično', done:false, created:isoToday(), due:isoOff(7) },
+      { id:3, name:'Godišnja skupština društva', desc:'Zakazati termin i pripremiti izvještaj', pri:'srednji', done:false, created:isoToday(), due:isoOff(30) },
+      { id:4, name:'Uređenje okoliša doma', desc:'Redovito održavanje okoliša vatrogasnog doma', pri:'nizak', done:false, created:isoToday(), due:isoOff(10),
+        subtasks:[{ id:1, text:'Šišanje trave', date:isoOff(-3), people:'Ivan, Marko' }] },
+    ],
+  };
+  nListId = 2; nTaskId = 5; nSubId = 2; activeList = 1;
+  saveState();
+}
+
+function saveState() {
+  setSaveStatus('saving');
+  clearTimeout(saveTimer);
+  saveTimer = setTimeout(persistState, 500);
+}
+
+async function persistState() {
+  try {
+    await stateDocRef.set({ lists, data });
+    setSaveStatus('saved');
+  } catch (e) {
+    console.error('Greška pri spremanju u Firebase:', e);
+    setSaveStatus('error');
+  }
+}
+
+function setSaveStatus(state) {
+  const el = document.getElementById('save-status');
+  if (!el) return;
+  const map = {
+    saving: { t:'Spremam…',        c:'var(--text-faint)' },
+    saved:  { t:'✓ Spremljeno',    c:'var(--text-faint)' },
+    error:  { t:'⚠ Greška spremanja', c:'var(--p-critical)' },
+  };
+  const s = map[state] || { t:'', c:'var(--text-faint)' };
+  el.textContent = s.t;
+  el.style.color = s.c;
+}
+
+/* ── Utils ── */
+function isoToday() { return new Date().toISOString().slice(0,10); }
+function isoOff(d)  { const x=new Date(); x.setDate(x.getDate()+d); return x.toISOString().slice(0,10); }
+function fmtD(iso)  { if(!iso) return ''; const [y,m,dd]=iso.split('-'); return dd+'.'+m+'.'+y+'.'; }
+function daysLeft(iso) {
+  if(!iso) return null;
+  const n=new Date(); n.setHours(0,0,0,0);
+  const e=new Date(iso); e.setHours(0,0,0,0);
+  return Math.round((e-n)/86400000);
+}
+function esc(s) { return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+function tasks() { return data[activeList] || []; }
+
+/* ── Sidebar liste ── */
+function renderDropdown() {
+  const current = lists.find(l=>l.id===activeList);
+  const hdr = document.getElementById('active-list-hdr');
+  if (hdr) {
+    hdr.innerHTML = current
+      ? `<div style="display:flex;align-items:center;gap:8px;">
+           <span class="dot" style="background:${current.color||'#94A3B8'}"></span>
+           <span class="name" style="color:${current.color||'#94A3B8'}">${esc(current.name)}</span>
+         </div>
+         ${current.desc ? `<div class="active-list-desc">${esc(current.desc)}</div>` : ''}`
+      : '';
+  }
+
+  const sel = document.getElementById('list-select');
+  if (sel) {
+    sel.innerHTML = lists.length
+      ? lists.map(l => `<option value="${l.id}"${l.id===activeList?' selected':''}>${esc(l.name)}</option>`).join('')
+      : '<option>Nema lista</option>';
+  }
+
+  renderListPanel();
+}
+
+function renderListPanel() {
+  const panel = document.getElementById('list-panel');
+  if (!panel) return;
+
+  if (editingListId !== null) {
+    const l = lists.find(x=>x.id===editingListId);
+    if (!l) { panel.innerHTML = ''; return; }
+    const color = l.color || '#94A3B8';
+    const ec = editingColor || color;
+    const swatches = LIST_COLOURS.map(c =>
+      `<span onclick="pickEditColor(this,'${c}')" title="${c}" style="width:16px;height:16px;border-radius:50%;background:${c};cursor:pointer;display:inline-block;flex-shrink:0;outline:${c===ec?'2px solid white':'none'};outline-offset:1px;box-shadow:${c===ec?'0 0 0 1px #555':'none'};"></span>`
+    ).join('');
+    panel.innerHTML = `<div class="list-edit-panel" style="border-left:3px solid ${ec};">
+      <input class="drop-new-inp" id="edit-name-${l.id}" value="${esc(l.name)}" maxlength="30" placeholder="Naziv liste..."
+        onkeydown="if(event.key==='Enter'){event.preventDefault();saveEditList(${l.id});} if(event.key==='Escape'){event.preventDefault();cancelEditList();}" />
+      <textarea class="drop-new-inp" id="edit-desc-${l.id}" placeholder="Opis liste (prikazuje se na vrhu stranice)..." maxlength="200"
+        style="height:auto;min-height:50px;padding:6px 8px;resize:vertical;line-height:1.4;margin-top:7px;width:100%;"
+        onkeydown="if(event.key==='Escape'){event.preventDefault();cancelEditList();}">${esc(l.desc||'')}</textarea>
+      <div style="display:flex;gap:5px;flex-wrap:wrap;margin-top:7px;">${swatches}</div>
+      <div style="display:flex;align-items:center;justify-content:space-between;gap:6px;margin-top:9px;">
+        <button onclick="askDeleteList(${l.id},'${esc(l.name)}',event)" title="Obriši listu" aria-label="Obriši listu"
+          style="background:none;border:none;cursor:pointer;color:var(--p-critical);padding:4px;border-radius:4px;display:flex;align-items:center;gap:4px;font-size:0.75rem;">
+          <svg width="12" height="12" viewBox="0 0 12 12" fill="none"><path d="M2 2l8 8M10 2L2 10" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>
+          Obriši
+        </button>
+        <div style="display:flex;gap:6px;">
+          <button onclick="cancelEditList()" style="height:26px;padding:0 10px;border:1px solid var(--border);border-radius:var(--r-sm);background:transparent;color:var(--text-muted);font-size:0.75rem;cursor:pointer;">Odustani</button>
+          <button onclick="saveEditList(${l.id})" style="height:26px;padding:0 10px;border:none;border-radius:var(--r-sm);background:var(--accent);color:#fff;font-size:0.75rem;font-weight:500;cursor:pointer;">Spremi</button>
+        </div>
+      </div>
+    </div>`;
+    return;
+  }
+
+  if (addingNewList) {
+    panel.innerHTML = `<div class="list-edit-panel">
+      <div class="drop-new">
+        <input class="drop-new-inp" id="new-list-inp" type="text" placeholder="Naziv nove liste..." maxlength="30"
+          onkeydown="if(event.key==='Enter'){event.preventDefault();addList();} if(event.key==='Escape'){event.preventDefault();cancelAddList();}" />
+        <button onclick="cancelAddList()" style="height:30px;padding:0 12px;border:1px solid var(--border);border-radius:var(--r-sm);background:transparent;color:var(--text-muted);font-size:0.8125rem;cursor:pointer;flex-shrink:0;">Odustani</button>
+        <button class="drop-new-btn" onclick="addList()" aria-label="Dodaj listu">+</button>
+      </div>
+    </div>`;
+    setTimeout(() => { const el = document.getElementById('new-list-inp'); if (el) el.focus(); }, 20);
+    return;
+  }
+
+  panel.innerHTML = '';
+}
+
+function toggleAddList(e) {
+  if (e) e.stopPropagation();
+  addingNewList = !addingNewList;
+  editingListId = null; editingColor = null;
+  renderListPanel();
+}
+function cancelAddList() {
+  addingNewList = false;
+  renderListPanel();
+}
+
+function switchList(id) {
+  activeList = id; filter = 'sve';
+  editingListId = null; editingColor = null; addingNewList = false;
+  document.querySelectorAll('.f-btn').forEach(b=>b.classList.toggle('active', b.dataset.f==='sve'));
+  renderDropdown();
+  renderTasks();
+}
+
+function addList() {
+  const inp = document.getElementById('new-list-inp');
+  const name = inp.value.trim();
+  if (!name) { inp.focus(); return; }
+  const id = nListId++;
+  lists.push({ id, name, color: selectedColor }); data[id] = [];
+  // cycle to next colour for convenience
+  const idx = LIST_COLOURS.indexOf(selectedColor);
+  selectedColor = LIST_COLOURS[(idx + 1) % LIST_COLOURS.length];
+  addingNewList = false;
+  saveState(); switchList(id);
+}
+
+function startEditList(id, e) {
+  if (e) e.stopPropagation();
+  const l = lists.find(x=>x.id===id);
+  if (!l) return;
+  editingListId = id;
+  editingColor = l.color || LIST_COLOURS[0];
+  addingNewList = false;
+  renderListPanel();
+  setTimeout(() => {
+    const inp = document.getElementById('edit-name-' + id);
+    if (inp) { inp.focus(); inp.select(); }
+  }, 20);
+}
+
+function pickEditColor(el, c) {
+  editingColor = c;
+  el.parentElement.querySelectorAll('span').forEach(s => { s.style.outline = 'none'; s.style.boxShadow = 'none'; });
+  el.style.outline = '2px solid white';
+  el.style.boxShadow = '0 0 0 1px #555';
+}
+
+function cancelEditList() {
+  editingListId = null; editingColor = null;
+  renderListPanel();
+}
+
+function saveEditList(id) {
+  const l = lists.find(x=>x.id===id);
+  if (!l) return;
+  const inp = document.getElementById('edit-name-' + id);
+  const descInp = document.getElementById('edit-desc-' + id);
+  const val = inp ? inp.value.trim() : '';
+  if (val) l.name = val;
+  l.desc = descInp ? descInp.value.trim() : (l.desc || '');
+  if (editingColor) l.color = editingColor;
+  editingListId = null; editingColor = null;
+  saveState(); renderDropdown();
+}
+
+function askDeleteList(id, name, e) {
+  e.stopPropagation();
+  deleteListId = id; deleteTaskId = null; deleteSubtaskInfo = null;
+  document.getElementById('confirm-title').textContent = 'Obriši listu';
+  document.getElementById('confirm-msg').textContent = `Sigurno želiš obrisati listu "${name}" i sve njene zadatke?`;
+  document.getElementById('confirm-overlay').classList.add('open');
+}
+function askDeleteTask() {
+  if (editId===null) return;
+  const t = tasks().find(x=>x.id===editId);
+  if (!t) return;
+  deleteTaskId = editId; deleteListId = null; deleteSubtaskInfo = null;
+  document.getElementById('confirm-title').textContent = 'Obriši zadatak';
+  document.getElementById('confirm-msg').textContent = `Sigurno želiš obrisati zadatak "${t.name}"?`;
+  document.getElementById('confirm-overlay').classList.add('open');
+}
+function askDeleteSubtask(taskId, subId, text, e) {
+  e.stopPropagation();
+  deleteSubtaskInfo = { taskId, subId }; deleteListId = null; deleteTaskId = null;
+  document.getElementById('confirm-title').textContent = 'Obriši podzadatak';
+  document.getElementById('confirm-msg').textContent = `Sigurno želiš obrisati podzadatak "${text}"?`;
+  document.getElementById('confirm-overlay').classList.add('open');
+}
+function closeConfirm() { document.getElementById('confirm-overlay').classList.remove('open'); deleteListId = null; deleteTaskId = null; deleteSubtaskInfo = null; }
+function confirmOvClick(e) { if(e.target===document.getElementById('confirm-overlay')) closeConfirm(); }
+function confirmDelete() {
+  if (deleteListId !== null) { confirmDeleteList(); return; }
+  if (deleteTaskId !== null) { confirmDeleteTask(); return; }
+  if (deleteSubtaskInfo !== null) { confirmDeleteSubtask(); return; }
+}
+function confirmDeleteTask() {
+  if (deleteTaskId===null) return;
+  data[activeList] = tasks().filter(x=>x.id!==deleteTaskId);
+  deleteTaskId = null;
+  saveState(); closeConfirm(); closeModal(); renderDropdown(); renderTasks();
+}
+function confirmDeleteSubtask() {
+  if (!deleteSubtaskInfo) return;
+  const { taskId, subId } = deleteSubtaskInfo;
+  removeSubtaskFromTask(taskId, subId);
+  deleteSubtaskInfo = null;
+  closeConfirm();
+}
+function confirmDeleteList() {
+  if(deleteListId===null) return;
+  lists = lists.filter(l=>l.id!==deleteListId);
+  delete data[deleteListId];
+  if(activeList===deleteListId) activeList = lists[0]?.id ?? null;
+  if(editingListId===deleteListId) { editingListId = null; editingColor = null; }
+  saveState(); closeConfirm(); renderDropdown(); renderTasks();
+}
+
+/* ── Task modal ── */
+function openModal(id) {
+  if(activeList===null) return;
+  editId = id||null;
+  const t = id ? tasks().find(x=>x.id===id) : null;
+  document.getElementById('modal-title').textContent = t ? 'Uredi zadatak' : 'Novi zadatak';
+  document.getElementById('f-name').value    = t ? t.name : '';
+  document.getElementById('f-desc').value    = t ? t.desc : '';
+  document.getElementById('f-pri').value     = t ? t.pri  : 'srednji';
+  document.getElementById('f-due').value     = t ? (t.due||'') : '';
+  document.getElementById('f-created').value = t ? (t.created||isoToday()) : isoToday();
+  document.getElementById('f-entered-by').value = t ? (t.enteredBy||'') : '';
+  document.getElementById('f-remind').value = t ? (t.remind||'') : '';
+  document.getElementById('task-delete-btn').style.display = t ? '' : 'none';
+  // populate list selector
+  const fList = document.getElementById('f-list');
+  fList.innerHTML = lists.map(l=>`<option value="${l.id}"${l.id===activeList?' selected':''}>${esc(l.name)}</option>`).join('');
+  document.getElementById('overlay').classList.add('open');
+  setTimeout(()=>document.getElementById('f-name').focus(), 80);
+}
+function closeModal() { document.getElementById('overlay').classList.remove('open'); editId=null; }
+function ovClick(e)   { if(e.target===document.getElementById('overlay')) closeModal(); }
+document.addEventListener('keydown', e => { if(e.key==='Escape') { closeModal(); closeConfirm(); } });
+
+function saveTask() {
+  const name = document.getElementById('f-name').value.trim();
+  if(!name) { document.getElementById('f-name').focus(); return; }
+  const desc      = document.getElementById('f-desc').value.trim();
+  const pri       = document.getElementById('f-pri').value;
+  const due       = document.getElementById('f-due').value;
+  const remind    = document.getElementById('f-remind').value;
+  const created   = document.getElementById('f-created').value || isoToday();
+  const enteredBy = document.getElementById('f-entered-by').value.trim();
+  const targetList= parseInt(document.getElementById('f-list').value);
+  if(editId!==null) {
+    // find which list currently holds this task
+    const srcList = Object.keys(data).find(lid => data[lid].find(x=>x.id===editId));
+    const arr = data[srcList];
+    const t = arr.find(x=>x.id===editId);
+    if(t) {
+      t.name=name; t.desc=desc; t.pri=pri; t.due=due; t.remind=remind; t.created=created; t.enteredBy=enteredBy;
+      if(parseInt(srcList) !== targetList) {
+        // move to target list
+        data[srcList] = arr.filter(x=>x.id!==editId);
+        data[targetList].push(t);
+      }
+    }
+  } else {
+    data[targetList].push({ id:nTaskId++, name, desc, pri, done:false, created, due, remind, enteredBy, subtasks:[] });
+  }
+  saveState(); renderDropdown(); renderTasks(); closeModal();
+}
+
+/* ── Task actions ── */
+function setFilter(f) {
+  filter=f;
+  document.querySelectorAll('.f-btn').forEach(b=>b.classList.toggle('active', b.dataset.f===f));
+  renderTasks();
+}
+function setSort(s) { sort=s; renderTasks(); }
+function toggle(id)    { const t=tasks().find(x=>x.id===id); if(t) t.done=!t.done; saveState(); renderDropdown(); renderTasks(); }
+function clearDone()   { data[activeList]=tasks().filter(x=>!x.done); saveState(); renderDropdown(); renderTasks(); }
+function changePri(id,val,el){ const t=tasks().find(x=>x.id===id); if(t) t.pri=val; el.dataset.pri=val; saveState(); renderTasks(); }
+
+/* ── Brzi unos podzadatka (izravno iz popisa, bez otvaranja zadatka) ── */
+let quickSubtaskFor = null;
+function toggleQuickSubtask(id) {
+  quickSubtaskFor = (quickSubtaskFor === id) ? null : id;
+  editingSubtask = null;
+  renderTasks();
+  if (quickSubtaskFor === id) {
+    setTimeout(() => { const el = document.getElementById('qs-text-' + id); if (el) el.focus(); }, 20);
+  }
+}
+function addQuickSubtask(taskId) {
+  const textInp = document.getElementById('qs-text-' + taskId);
+  const dateInp = document.getElementById('qs-date-' + taskId);
+  const peopleInp = document.getElementById('qs-people-' + taskId);
+  const text = textInp.value.trim();
+  if (!text) { textInp.focus(); return; }
+  const t = tasks().find(x => x.id === taskId);
+  if (!t) return;
+  if (!Array.isArray(t.subtasks)) t.subtasks = [];
+  t.subtasks.push({ id: nSubId++, text, date: dateInp.value, people: peopleInp.value.trim() });
+  quickSubtaskFor = null;
+  saveState(); renderTasks();
+}
+function removeSubtaskFromTask(taskId, subId) {
+  const t = tasks().find(x => x.id === taskId);
+  if (!t || !Array.isArray(t.subtasks)) return;
+  t.subtasks = t.subtasks.filter(s => s.id !== subId);
+  saveState(); renderTasks();
+}
+
+function findTaskById(taskId) {
+  for (const lid in data) {
+    const t = data[lid].find(x => x.id === taskId);
+    if (t) return t;
+  }
+  return null;
+}
+
+function cycleSubtaskStatus(taskId, subId, e) {
+  if (e) e.stopPropagation();
+  const t = findTaskById(taskId);
+  if (!t || !Array.isArray(t.subtasks)) return;
+  const s = t.subtasks.find(x => x.id === subId);
+  if (!s) return;
+  const order = ['todo', 'progress', 'done'];
+  const cur = order.indexOf(s.status || 'todo');
+  s.status = order[(cur + 1) % order.length];
+  if (s.status === 'todo') delete s.status;
+  saveState();
+  if (document.getElementById('home-view').style.display !== 'none') renderHomeReminders();
+  else renderTasks();
+}
+
+/* ── Uređivanje postojećeg podzadatka ── */
+let editingSubtask = null;
+function startEditSubtask(taskId, subId, e) {
+  e.stopPropagation();
+  quickSubtaskFor = null;
+  editingSubtask = { taskId, subId };
+  renderTasks();
+  setTimeout(() => { const el = document.getElementById('es-text-' + subId); if (el) { el.focus(); el.select(); } }, 20);
+}
+function cancelEditSubtask() {
+  editingSubtask = null;
+  renderTasks();
+}
+function saveEditSubtask(taskId, subId) {
+  const t = tasks().find(x => x.id === taskId);
+  if (!t || !Array.isArray(t.subtasks)) return;
+  const s = t.subtasks.find(x => x.id === subId);
+  if (!s) return;
+  const textInp = document.getElementById('es-text-' + subId);
+  const dateInp = document.getElementById('es-date-' + subId);
+  const peopleInp = document.getElementById('es-people-' + subId);
+  const text = textInp ? textInp.value.trim() : '';
+  if (!text) { textInp.focus(); return; }
+  s.text = text;
+  s.date = dateInp ? dateInp.value : s.date;
+  s.people = peopleInp ? peopleInp.value.trim() : s.people;
+  editingSubtask = null;
+  saveState(); renderTasks();
+}
+
+/* ── Render tasks ── */
+function renderTasks() {
+  const today = isoToday();
+  const arr = tasks();
+  let vis = arr;
+  if(filter==='aktivno')  vis=arr.filter(x=>!x.done);
+  if(filter==='završeno') vis=arr.filter(x=>x.done);
+
+  const sorted=[...vis].sort((a,b)=>{
+    // always push done to bottom
+    if(a.done!==b.done) return a.done?1:-1;
+
+    // primary: overdue first, then priority group
+    const ao=!a.done&&a.due&&a.due<today, bo=!b.done&&b.due&&b.due<today;
+    if(ao!==bo) return ao?-1:1;
+    const priDiff = PRI_ORDER.indexOf(a.pri)-PRI_ORDER.indexOf(b.pri);
+    if(priDiff!==0) return priDiff;
+
+    // secondary: within same priority group, apply selected sort (newest first)
+    if(sort==='unos') return (b.created||'').localeCompare(a.created||'');
+    if(sort==='rok') {
+      if(!a.due && !b.due) return 0;
+      if(!a.due) return 1;
+      if(!b.due) return -1;
+      return b.due.localeCompare(a.due);
+    }
+    return 0;
+  });
+
+  const active = arr.filter(x=>!x.done).length;
+  const done   = arr.filter(x=>x.done).length;
+  document.getElementById('footer-txt').textContent = active+' preostalo';
+  document.getElementById('clear-btn').style.display = done>0?'':'none';
+  document.getElementById('empty').style.display = sorted.length===0?'':'none';
+
+  const listEl = document.getElementById('task-list');
+  if(!sorted.length) { listEl.innerHTML=''; return; }
+
+  const calSVG = `<svg width="11" height="11" viewBox="0 0 12 12" fill="none" aria-hidden="true"><rect x="1.5" y="2" width="9" height="9" rx="1.5" stroke="currentColor" stroke-width="1.3"/><path d="M4 1v2M8 1v2M1.5 5h9" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/></svg>`;
+  const clkSVG = `<svg width="11" height="11" viewBox="0 0 12 12" fill="none" aria-hidden="true"><circle cx="6" cy="6" r="5" stroke="currentColor" stroke-width="1.4"/><path d="M6 3.5V6.5L8 8" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/></svg>`;
+  const bellSVG = `<svg width="11" height="11" viewBox="0 0 12 12" fill="none" aria-hidden="true"><path d="M6 1.2c-1.4 0-2.4 1.1-2.4 2.5v1.6c0 .5-.2 1-.6 1.4L2.4 7.3c-.3.3-.1.9.3.9h6.6c.4 0 .6-.6.3-.9l-.6-.6c-.4-.4-.6-.9-.6-1.4V3.7c0-1.4-1-2.5-2.4-2.5z" stroke="currentColor" stroke-width="1.1" stroke-linejoin="round"/><path d="M5 9.3c.2.5.6.8 1 .8s.8-.3 1-.8" stroke="currentColor" stroke-width="1.1" stroke-linecap="round"/></svg>`;
+  const editSVG= `<svg width="14" height="14" viewBox="0 0 15 15" fill="none"><path d="M10.5 2.5l2 2L5 12H3v-2L10.5 2.5z" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round"/></svg>`;
+  const plusSVG = `<svg width="13" height="13" viewBox="0 0 14 14" fill="none" aria-hidden="true"><path d="M7 1v12M1 7h12" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>`;
+
+  let html='', lastGrp=null;
+  for(const t of sorted){
+    const isOver=!t.done&&t.due&&t.due<today;
+    const grp=t.done?'__done__':t.pri;
+    if(grp!==lastGrp){
+      html+=`<div class="section-lbl">${t.done?'✓ Završeno':PRI_FULL[t.pri]}</div>`;
+      lastGrp=grp;
+    }
+    let dueCell='';
+    if(t.due){
+      const dl=daysLeft(t.due), df=fmtD(t.due);
+      if(dl<0)        dueCell=`<span class="task-date overdue">${clkSVG} ${df} (${Math.abs(dl)}d kasno)</span>`;
+      else if(dl===0) dueCell=`<span class="task-date soon">${clkSVG} Danas</span>`;
+      else if(dl<=3)  dueCell=`<span class="task-date soon">${clkSVG} ${df} (za ${dl}d)</span>`;
+      else            dueCell=`<span class="task-date ok">${clkSVG} ${df}</span>`;
+    }
+    let remindCell='';
+    if(t.remind){
+      const rl=daysLeft(t.remind), rf=fmtD(t.remind);
+      if(rl<0)        remindCell=`<span class="task-date overdue">${bellSVG} ${rf}</span>`;
+      else if(rl===0) remindCell=`<span class="task-date soon">${bellSVG} Danas</span>`;
+      else            remindCell=`<span class="task-date">${bellSVG} ${rf}</span>`;
+    }
+    const createdRow  = t.created ? `<span class="task-date">${calSVG} ${fmtD(t.created)}</span>` : '';
+    const datesBlock  = (dueCell||remindCell||createdRow) ? `<div class="task-dates">${dueCell}${remindCell}${createdRow}</div>` : '';
+    const priOpts = PRI_ORDER.map(p=>`<option value="${p}"${p===t.pri?' selected':''}>${PRI_SEC[p]}</option>`).join('');
+    const hasSubs = t.subtasks && t.subtasks.length;
+    const showQuickAdd = quickSubtaskFor === t.id;
+    const subtaskList = (hasSubs || showQuickAdd) ? `<div class="subtask-list" data-pri="${esc(t.pri)}">
+      ${hasSubs ? [...t.subtasks].sort((a,b) => (b.date||'').localeCompare(a.date||'')).map(s => {
+        if (editingSubtask && editingSubtask.taskId === t.id && editingSubtask.subId === s.id) {
+          return `<div class="subtask-add-row">
+            <input class="inp" id="es-text-${s.id}" value="${esc(s.text)}" placeholder="Opis..." style="flex:2;height:30px;font-size:0.7812rem;min-width:110px;"
+              onkeydown="if(event.key==='Enter'){event.preventDefault();saveEditSubtask(${t.id},${s.id});} if(event.key==='Escape'){event.preventDefault();cancelEditSubtask();}" />
+            <input class="inp" type="date" id="es-date-${s.id}" value="${esc(s.date||'')}" style="flex:1;height:30px;font-size:0.7812rem;min-width:110px;" title="Datum izvršenja" />
+            <input class="inp" id="es-people-${s.id}" value="${esc(s.people||'')}" placeholder="Naziv..." style="flex:1;height:30px;font-size:0.7812rem;min-width:90px;"
+              onkeydown="if(event.key==='Enter'){event.preventDefault();saveEditSubtask(${t.id},${s.id});} if(event.key==='Escape'){event.preventDefault();cancelEditSubtask();}" />
+            <button onclick="askDeleteSubtask(${t.id},${s.id},'${esc(s.text)}',event)" title="Obriši podzadatak" aria-label="Obriši podzadatak"
+              style="height:30px;padding:0 10px;background:none;border:none;color:var(--p-critical);cursor:pointer;flex-shrink:0;font-size:0.75rem;font-weight:500;">Obriši</button>
+            <button onclick="cancelEditSubtask()" style="height:30px;padding:0 10px;border:1px solid var(--border);border-radius:var(--r-sm);background:transparent;color:var(--text-muted);font-size:0.75rem;cursor:pointer;flex-shrink:0;margin-left:auto;">Odustani</button>
+            <button onclick="saveEditSubtask(${t.id},${s.id})" style="height:30px;padding:0 10px;background:var(--accent);color:#fff;border:none;border-radius:var(--r-sm);font-size:0.75rem;font-weight:500;cursor:pointer;flex-shrink:0;">Spremi</button>
+          </div>`;
+        }
+        return `<div class="subtask-row${s.status==='done'?' is-done':''}">
+        <button class="subtask-status status-${s.status||'todo'}" onclick="cycleSubtaskStatus(${t.id},${s.id},event)"
+          title="${s.status==='done'?'Riješeno (klikni za poništi)':s.status==='progress'?'U obradi (klikni za riješeno)':'Nezapočeto (klikni za u obradi)'}" aria-label="Status podzadatka">
+          ${s.status==='done'
+            ? `<svg width="10" height="10" viewBox="0 0 12 12" fill="none"><path d="M2.5 6.2l2.3 2.3L9.5 3.5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>`
+            : s.status==='progress'
+              ? `<svg width="10" height="10" viewBox="0 0 12 12" fill="none"><circle cx="6" cy="6" r="4.3" stroke="currentColor" stroke-width="1.4"/><path d="M6 3.4V6l1.8 1" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/></svg>`
+              : ``}
+        </button>
+        ${s.date ? `<span class="subtask-date">${fmtD(s.date)}</span>` : ''}
+        <span class="subtask-text">${esc(s.text)}</span>
+        ${s.people ? `<span class="subtask-meta">${esc(s.people)}</span>` : ''}
+        <button class="subtask-edit" onclick="startEditSubtask(${t.id},${s.id},event)" aria-label="Uredi podzadatak" title="Uredi">
+          <svg width="10" height="10" viewBox="0 0 15 15" fill="none"><path d="M10.5 2.5l2 2L5 12H3v-2L10.5 2.5z" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round"/></svg>
+        </button>
+      </div>`;
+      }).join('') : ''}
+      ${showQuickAdd ? `<div class="subtask-add-row">
+        <input class="inp" id="qs-text-${t.id}" placeholder="Opis..." style="flex:2;height:30px;font-size:0.7812rem;min-width:110px;"
+          onkeydown="if(event.key==='Enter'){event.preventDefault();addQuickSubtask(${t.id});} if(event.key==='Escape'){event.preventDefault();toggleQuickSubtask(${t.id});}" />
+        <input class="inp" type="date" id="qs-date-${t.id}" style="flex:1;height:30px;font-size:0.7812rem;min-width:110px;" title="Datum izvršenja" />
+        <input class="inp" id="qs-people-${t.id}" placeholder="Naziv..." style="flex:1;height:30px;font-size:0.7812rem;min-width:90px;"
+          onkeydown="if(event.key==='Enter'){event.preventDefault();addQuickSubtask(${t.id});} if(event.key==='Escape'){event.preventDefault();toggleQuickSubtask(${t.id});}" />
+        <button onclick="addQuickSubtask(${t.id})" style="height:30px;padding:0 10px;background:var(--accent);color:#fff;border:none;border-radius:var(--r-sm);font-size:0.75rem;font-weight:500;cursor:pointer;flex-shrink:0;">Dodaj</button>
+      </div>` : ''}
+    </div>` : '';
+    html+=`
+    <div class="task-wrap">
+    <div class="task ${t.done?'done':''}${subtaskList?' has-sub':''}" data-pri="${esc(t.pri)}">
+      <input type="checkbox" class="task-chk" ${t.done?'checked':''} onchange="toggle(${t.id})" aria-label="Označi" />
+      <span class="task-name" title="${esc(t.name)}">${esc(t.name)}</span>
+      <span class="task-sep" aria-hidden="true"></span>
+      <span class="task-desc" title="${esc(t.desc)}">${esc(t.desc)}</span>
+      ${datesBlock}
+      <div class="task-actions">
+        <div class="task-actions-top">
+          <select class="pri-inline" data-pri="${esc(t.pri)}" onchange="changePri(${t.id},this.value,this)" aria-label="Prioritet">${priOpts}</select>
+          <button class="icon-btn" onclick="openModal(${t.id})" title="Uredi" aria-label="Uredi">${editSVG}</button>
+        </div>
+        <button class="subtask-add-link" onclick="toggleQuickSubtask(${t.id})">${plusSVG}Dodaj opis</button>
+      </div>
+    </div>
+    ${subtaskList}
+    </div>`;
+  }
+  listEl.innerHTML=html;
+}
+
+/* ── Veličina teksta (osobna postavka, ne dijeli se s drugima) ── */
+const FONT_SIZES = { small: '14px', medium: '16px', large: '19px' };
+function setFontSize(size) {
+  document.documentElement.style.fontSize = FONT_SIZES[size] || FONT_SIZES.medium;
+  try { localStorage.setItem('font-size-pref', size); } catch (e) {}
+}
+async function loadFontSize() {
+  let size = 'medium';
+  try {
+    const stored = localStorage.getItem('font-size-pref');
+    if (stored && FONT_SIZES[stored]) size = stored;
+  } catch (e) { /* nema spremljene postavke */ }
+  document.documentElement.style.fontSize = FONT_SIZES[size];
+  const sel = document.getElementById('font-size-sel');
+  if (sel) sel.value = size;
+}
+
+/* ── Password + Home screen ── */
+const APP_PASSWORD = '193';
+
+function checkPassword() {
+  const inp = document.getElementById('pw-input');
+  const err = document.getElementById('pw-error');
+  if (inp.value === APP_PASSWORD) {
+    err.textContent = '';
+    document.getElementById('password-view').style.display = 'none';
+    goHome();
+  } else {
+    err.textContent = 'Pogrešna lozinka.';
+    inp.value = '';
+    inp.focus();
+  }
+}
+
+async function goHome() {
+  document.getElementById('app-view').style.display = 'none';
+  document.getElementById('home-view').style.display = 'block';
+  await dataReadyPromise;
+  renderHomeReminders();
+}
+
+function goToApp() {
+  document.getElementById('home-view').style.display = 'none';
+  document.getElementById('app-view').style.display = 'block';
+}
+
+function openReminderTask(listId, taskId) {
+  goToApp();
+  switchList(listId);
+  setTimeout(() => openModal(taskId), 30);
+}
+
+function renderHomeReminders() {
+  const el = document.getElementById('home-reminders');
+  if (!el) return;
+  const now = isoToday();
+  const items = [];
+  lists.forEach(l => {
+    (data[l.id]||[]).forEach(t => {
+      if (t.remind && !t.done && t.remind <= now) items.push({ list: l, task: t });
+    });
+  });
+  items.sort((a,b) => a.task.remind.localeCompare(b.task.remind));
+
+  if (!items.length) {
+    el.innerHTML = '<div style="text-align:center;padding:3rem 1rem;color:var(--text-faint);font-size:0.9375rem;">Nema dospjelih podsjetnika. 🎉</div>';
+    return;
+  }
+
+  const PRI_CLASS = { kritično:'critical', visok:'high', srednji:'mid', nizak:'low' };
+  el.innerHTML = items.map(({list:l, task:t}) => {
+    const overdue = t.remind < now;
+    const pc = PRI_CLASS[t.pri] || 'mid';
+    const priBadge = `<span style="font-size:0.75rem;font-weight:600;padding:2px 8px;border-radius:99px;background:var(--p-${pc}-bg);color:var(--p-${pc}-text);border:1px solid var(--p-${pc}-border);">${PRI_FULL[t.pri]}</span>`;
+    const dueBadge = t.due ? `<span class="task-date${t.due<now?' overdue':(t.due===now?' soon':' ok')}">${t.due<now?'⏰':'📅'} Rok: ${fmtD(t.due)}</span>` : '';
+    const createdBadge = t.created ? `<span class="task-date">🗓️ Unesen: ${fmtD(t.created)}</span>` : '';
+    const enteredByBadge = t.enteredBy ? `<span style="font-size:0.75rem;color:var(--text-faint);">Unio/la: ${esc(t.enteredBy)}</span>` : '';
+    const descBlock = t.desc ? `<div style="font-size:0.875rem;color:var(--text-muted);line-height:1.4;">${esc(t.desc)}</div>` : '';
+    const subsBlock = (t.subtasks && t.subtasks.length) ? `<div class="subtask-list" data-pri="${esc(t.pri)}" style="margin-top:2px;">
+      ${[...t.subtasks].sort((a,b)=>(b.date||'').localeCompare(a.date||'')).map(s => `<div class="subtask-row${s.status==='done'?' is-done':''}">
+        <button class="subtask-status status-${s.status||'todo'}" onclick="cycleSubtaskStatus(${t.id},${s.id},event)" title="Status podzadatka" aria-label="Status podzadatka">
+          ${s.status==='done'
+            ? `<svg width="10" height="10" viewBox="0 0 12 12" fill="none"><path d="M2.5 6.2l2.3 2.3L9.5 3.5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>`
+            : s.status==='progress'
+              ? `<svg width="10" height="10" viewBox="0 0 12 12" fill="none"><circle cx="6" cy="6" r="4.3" stroke="currentColor" stroke-width="1.4"/><path d="M6 3.4V6l1.8 1" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/></svg>`
+              : ``}
+        </button>
+        ${s.date ? `<span class="subtask-date">${fmtD(s.date)}</span>` : ''}
+        <span class="subtask-text">${esc(s.text)}</span>
+        ${s.people ? `<span class="subtask-meta">${esc(s.people)}</span>` : ''}
+      </div>`).join('')}
+    </div>` : '';
+
+    return `<div class="task-wrap" style="margin-bottom:10px;">
+    <div class="task has-sub" style="border-left:3px solid ${l.color||'#94A3B8'};cursor:pointer;height:auto;flex-wrap:wrap;align-items:stretch;" onclick="openReminderTask(${l.id},${t.id})">
+      <div style="flex:1 1 100%;min-width:0;padding:12px 14px;display:flex;flex-direction:column;gap:6px;">
+        <div style="display:flex;align-items:center;flex-wrap:wrap;gap:8px;">
+          <span style="font-size:1rem;font-weight:600;color:var(--text);">${esc(t.name)}</span>
+          ${priBadge}
+        </div>
+        ${descBlock}
+        <div style="display:flex;align-items:center;flex-wrap:wrap;gap:10px;">
+          <span style="font-size:0.75rem;color:${l.color||'#94A3B8'};font-weight:600;">📋 ${esc(l.name)}</span>
+          <span class="task-date ${overdue?'overdue':'soon'}">🔔 Podsjeti: ${fmtD(t.remind)}</span>
+          ${dueBadge}
+          ${createdBadge}
+          ${enteredByBadge}
+        </div>
+      </div>
+    </div>
+    ${subsBlock}
+    </div>`;
+  }).join('');
+}
+
+/* ── Init ── */
+const dataReadyPromise = (async () => {
+  document.getElementById('task-list').innerHTML = '<div class="empty">Učitavanje…</div>';
+  await Promise.all([loadState(), loadFontSize()]);
+  renderDropdown();
+  renderTasks();
+})();
+(function initPasswordScreen() {
+  setTimeout(() => { const el = document.getElementById('pw-input'); if (el) el.focus(); }, 50);
+})();
+
+/* ── Export to Excel ── */
+function exportExcel() {
+  const wb = XLSX.utils.book_new();
+  const COLS = ['Lista', 'Naziv', 'Opis', 'Prioritet', 'Status', 'Datum unosa', 'Datum roka'];
+
+  // one sheet per list
+  lists.forEach(l => {
+    const rows = [COLS];
+    (data[l.id] || []).forEach(t => {
+      rows.push([
+        l.name,
+        t.name,
+        t.desc || '',
+        t.pri.charAt(0).toUpperCase() + t.pri.slice(1),
+        t.done ? 'Završeno' : 'Aktivno',
+        t.created || '',
+        t.due || '',
+      ]);
+    });
+    const ws = XLSX.utils.aoa_to_sheet(rows);
+    // column widths
+    ws['!cols'] = [14,28,36,12,12,14,14].map(w=>({wch:w}));
+    XLSX.utils.book_append_sheet(wb, ws, l.name.slice(0,31));
+  });
+
+  // also one combined "Sve" sheet
+  const allRows = [COLS];
+  lists.forEach(l => {
+    (data[l.id] || []).forEach(t => {
+      allRows.push([
+        l.name, t.name, t.desc||'',
+        t.pri.charAt(0).toUpperCase()+t.pri.slice(1),
+        t.done?'Završeno':'Aktivno',
+        t.created||'', t.due||'',
+      ]);
+    });
+  });
+  const wsAll = XLSX.utils.aoa_to_sheet(allRows);
+  wsAll['!cols'] = [14,28,36,12,12,14,14].map(w=>({wch:w}));
+  XLSX.utils.book_append_sheet(wb, wsAll, 'Sve liste');
+
+  const date = isoToday().replace(/-/g,'');
+  XLSX.writeFile(wb, `todo-lista-${date}.xlsx`);
+}
+
+/* ── Import from Excel ── */
+function importExcel(event) {
+  const file = event.target.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = e => {
+    try {
+      const wb = XLSX.read(e.target.result, { type:'binary' });
+      let imported = 0, skipped = 0;
+
+      wb.SheetNames.forEach(sheetName => {
+        if (sheetName === 'Sve liste') return; // skip combined sheet on import
+        const ws = wb.Sheets[sheetName];
+        const rows = XLSX.utils.sheet_to_json(ws, { header:1, defval:'' });
+        if (rows.length < 2) return;
+
+        const header = rows[0].map(h => String(h).trim().toLowerCase());
+        const col = name => header.indexOf(name);
+        const iNaziv   = col('naziv');
+        const iOpis    = col('opis');
+        const iPri     = col('prioritet');
+        const iStatus  = col('status');
+        const iCreated = col('datum unosa');
+        const iDue     = col('datum roka');
+        const iLista   = col('lista');
+
+        if (iNaziv === -1) return; // skip sheets without 'Naziv' column
+
+        for (let r = 1; r < rows.length; r++) {
+          const row = rows[r];
+          const name = String(row[iNaziv] || '').trim();
+          if (!name) continue;
+
+          // resolve target list from cell or sheet name
+          const cellList = iLista >= 0 ? String(row[iLista] || '').trim() : '';
+          const targetName = cellList || sheetName;
+          let listObj = lists.find(l => l.name.toLowerCase() === targetName.toLowerCase());
+          if (!listObj) {
+            // create new list
+            const newId = nListId++;
+            listObj = { id: newId, name: targetName };
+            lists.push(listObj);
+            data[newId] = [];
+          }
+
+          // normalise priority
+          const priRaw = String(row[iPri] || '').toLowerCase().replace(/[🔴🟠🔵⚪]/gu,'').trim();
+          const priMap = { 'kritično':'kritično', 'krit.':'kritično', 'krit':'kritično', 'visok':'visok', 'srednji':'srednji', 'sred.':'srednji', 'sred':'srednji', 'nizak':'nizak' };
+          const pri = priMap[priRaw] || 'srednji';
+
+          const done = String(row[iStatus]||'').toLowerCase().includes('završ');
+
+          // normalise dates (accept dd.mm.yyyy or yyyy-mm-dd)
+          function parseDate(v) {
+            const s = String(v||'').trim();
+            if (!s) return '';
+            if (/^\d{4}-\d{2}-\d{2}$/.test(s)) return s;
+            const m = s.match(/^(\d{1,2})\.(\d{1,2})\.(\d{4})/);
+            if (m) return `${m[3]}-${m[2].padStart(2,'0')}-${m[1].padStart(2,'0')}`;
+            // Excel serial number
+            if (!isNaN(s)) {
+              const d = XLSX.SSF.parse_date_code(Number(s));
+              if (d) return `${d.y}-${String(d.m).padStart(2,'0')}-${String(d.d).padStart(2,'0')}`;
+            }
+            return '';
+          }
+
+          data[listObj.id].push({
+            id: nTaskId++,
+            name,
+            desc:    String(row[iOpis]||'').trim(),
+            pri,
+            done,
+            created: parseDate(row[iCreated]) || isoToday(),
+            due:     parseDate(row[iDue]),
+          });
+          imported++;
+        }
+      });
+
+      saveState();
+      renderDropdown();
+      renderTasks();
+      event.target.value = '';
+      alert(`Uvezeno ${imported} zadataka.${skipped?' ('+skipped+' preskočeno)':''}`);
+    } catch(err) {
+      alert('Greška pri uvozu: ' + err.message);
+    }
+  };
+  reader.readAsBinaryString(file);
+}
+</script>
+</body>
+</html>
