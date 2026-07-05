@@ -638,7 +638,7 @@ function daysLeft(iso) {
   const e=new Date(iso); e.setHours(0,0,0,0);
   return Math.round((e-n)/86400000);
 }
-function esc(s) { return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+function esc(s) { return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;'); }
 function tasks() { return data[activeList] || []; }
 
 /* ── Sidebar liste ── */
@@ -685,7 +685,7 @@ function renderListPanel() {
         onkeydown="if(event.key==='Escape'){event.preventDefault();cancelEditList();}">${esc(l.desc||'')}</textarea>
       <div style="display:flex;gap:5px;flex-wrap:wrap;margin-top:7px;">${swatches}</div>
       <div style="display:flex;align-items:center;justify-content:space-between;gap:6px;margin-top:9px;">
-        <button onclick="askDeleteList(${l.id},'${esc(l.name)}',event)" title="Obriši listu" aria-label="Obriši listu"
+        <button onclick="askDeleteList(${l.id},event)" title="Obriši listu" aria-label="Obriši listu"
           style="background:none;border:none;cursor:pointer;color:var(--p-critical);padding:4px;border-radius:4px;display:flex;align-items:center;gap:4px;font-size:0.75rem;">
           <svg width="12" height="12" viewBox="0 0 12 12" fill="none"><path d="M2 2l8 8M10 2L2 10" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>
           Obriši
@@ -786,11 +786,13 @@ function saveEditList(id) {
   saveState(); renderDropdown();
 }
 
-function askDeleteList(id, name, e) {
+function askDeleteList(id, e) {
   e.stopPropagation();
+  const l = lists.find(x=>x.id===id);
+  if (!l) return;
   deleteListId = id; deleteTaskId = null; deleteSubtaskInfo = null;
   document.getElementById('confirm-title').textContent = 'Obriši listu';
-  document.getElementById('confirm-msg').textContent = `Sigurno želiš obrisati listu "${name}" i sve njene zadatke?`;
+  document.getElementById('confirm-msg').textContent = `Sigurno želiš obrisati listu "${l.name}" i sve njene zadatke?`;
   document.getElementById('confirm-overlay').classList.add('open');
 }
 function askDeleteTask() {
@@ -802,11 +804,14 @@ function askDeleteTask() {
   document.getElementById('confirm-msg').textContent = `Sigurno želiš obrisati zadatak "${t.name}"?`;
   document.getElementById('confirm-overlay').classList.add('open');
 }
-function askDeleteSubtask(taskId, subId, text, e) {
+function askDeleteSubtask(taskId, subId, e) {
   e.stopPropagation();
+  const t = findTaskById(taskId);
+  const s = t && Array.isArray(t.subtasks) ? t.subtasks.find(x=>x.id===subId) : null;
+  if (!s) return;
   deleteSubtaskInfo = { taskId, subId }; deleteListId = null; deleteTaskId = null;
   document.getElementById('confirm-title').textContent = 'Obriši podzadatak';
-  document.getElementById('confirm-msg').textContent = `Sigurno želiš obrisati podzadatak "${text}"?`;
+  document.getElementById('confirm-msg').textContent = `Sigurno želiš obrisati podzadatak "${s.text}"?`;
   document.getElementById('confirm-overlay').classList.add('open');
 }
 function closeConfirm() { document.getElementById('confirm-overlay').classList.remove('open'); deleteListId = null; deleteTaskId = null; deleteSubtaskInfo = null; }
@@ -1066,7 +1071,7 @@ function renderTasks() {
             <input class="inp" type="date" id="es-date-${s.id}" value="${esc(s.date||'')}" style="flex:1;height:30px;font-size:0.7812rem;min-width:110px;" title="Datum izvršenja" />
             <input class="inp" id="es-people-${s.id}" value="${esc(s.people||'')}" placeholder="Naziv..." style="flex:1;height:30px;font-size:0.7812rem;min-width:90px;"
               onkeydown="if(event.key==='Enter'){event.preventDefault();saveEditSubtask(${t.id},${s.id});} if(event.key==='Escape'){event.preventDefault();cancelEditSubtask();}" />
-            <button onclick="askDeleteSubtask(${t.id},${s.id},'${esc(s.text)}',event)" title="Obriši podzadatak" aria-label="Obriši podzadatak"
+            <button onclick="askDeleteSubtask(${t.id},${s.id},event)" title="Obriši podzadatak" aria-label="Obriši podzadatak"
               style="height:30px;padding:0 10px;background:none;border:none;color:var(--p-critical);cursor:pointer;flex-shrink:0;font-size:0.75rem;font-weight:500;">Obriši</button>
             <button onclick="cancelEditSubtask()" style="height:30px;padding:0 10px;border:1px solid var(--border);border-radius:var(--r-sm);background:transparent;color:var(--text-muted);font-size:0.75rem;cursor:pointer;flex-shrink:0;margin-left:auto;">Odustani</button>
             <button onclick="saveEditSubtask(${t.id},${s.id})" style="height:30px;padding:0 10px;background:var(--accent);color:#fff;border:none;border-radius:var(--r-sm);font-size:0.75rem;font-weight:500;cursor:pointer;flex-shrink:0;">Spremi</button>
