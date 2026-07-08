@@ -387,6 +387,9 @@ body {
       <option value="medium" selected>Srednji tekst</option>
       <option value="large">Veliki tekst</option>
     </select>
+    <button class="icon-btn" onclick="openBackupPanel(event)" title="Sigurnosne kopije" aria-label="Sigurnosne kopije">
+      <svg width="14" height="14" viewBox="0 0 16 16" fill="none"><rect x="2" y="4" width="12" height="9" rx="1.2" stroke="currentColor" stroke-width="1.3"/><path d="M2 6.5h12M5.5 4V2.8a.8.8 0 0 1 .8-.8h3.4a.8.8 0 0 1 .8.8V4" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/></svg>
+    </button>
     <button class="icon-btn" onclick="logout()" title="Odjava" aria-label="Odjava" style="display:flex;align-items:center;gap:5px;font-size:0.8125rem;color:var(--text-muted);padding:5px 8px;">
       Odjava
       <svg width="14" height="14" viewBox="0 0 16 16" fill="none"><path d="M6 2H3a1 1 0 0 0-1 1v10a1 1 0 0 0 1 1h3M11 11l3-3-3-3M14 8H6" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg>
@@ -518,6 +521,20 @@ body {
   </div>
 </div>
 
+<!-- Backup modal -->
+<div class="overlay" id="backup-overlay" onclick="backupOvClick(event)">
+  <div class="modal" role="dialog" aria-modal="true" style="max-width:420px;">
+    <div class="modal-hdr">
+      <span class="modal-title">Sigurnosne kopije</span>
+      <button class="modal-x" onclick="closeBackupPanel()" aria-label="Zatvori">
+        <svg width="17" height="17" viewBox="0 0 17 17" fill="none"><path d="M3 3l11 11M14 3L3 14" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>
+      </button>
+    </div>
+    <p style="font-size:0.8125rem;color:var(--text-faint);margin-bottom:1rem;">Svaki dan automatski se sprema kopija stanja. Kopije starije od 30 dana automatski se brišu.</p>
+    <div id="backup-list" style="display:flex;flex-direction:column;gap:6px;max-height:50vh;overflow-y:auto;"></div>
+  </div>
+</div>
+
 <script>
 const PRI_ORDER = ['kritično','visok','srednji','nizak'];
 const PRI_SEC   = { kritično:'🔴 Krit.', visok:'🟠 Visok', srednji:'🔵 Sred.', nizak:'⚪ Nizak' };
@@ -554,6 +571,7 @@ const firebaseConfig = {
 firebase.initializeApp(firebaseConfig);
 const db = firebase.firestore();
 const stateDocRef = db.collection('todo').doc('app-state');
+const backupsRef = db.collection('todo_backups');
 
 let saveTimer = null;
 
@@ -605,10 +623,21 @@ function saveState() {
   saveTimer = setTimeout(persistState, 500);
 }
 
+function currentBackupKey() {
+  const d = new Date();
+  const y = d.getFullYear();
+  const m = String(d.getMonth()+1).padStart(2,'0');
+  const day = String(d.getDate()).padStart(2,'0');
+  const h = String(d.getHours()).padStart(2,'0');
+  return { key: `${y}-${m}-${day}_${h}`, date: `${y}-${m}-${day}`, hour: h };
+}
+
 async function persistState() {
   try {
     await stateDocRef.set({ lists, data });
     setSaveStatus('saved');
+    const { key, date, hour } = currentBackupKey();
+    backupsRef.doc(key).set({ key, date, hour, lists, data }).catch(() => {});
   } catch (e) {
     console.error('Greška pri spremanju u Firebase:', e);
     setSaveStatus('error');
@@ -638,7 +667,7 @@ function daysLeft(iso) {
   const e=new Date(iso); e.setHours(0,0,0,0);
   return Math.round((e-n)/86400000);
 }
-function esc(s) { return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;'); }
+function esc(s) { return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
 function tasks() { return data[activeList] || []; }
 
 /* ── Sidebar liste ── */
@@ -685,7 +714,7 @@ function renderListPanel() {
         onkeydown="if(event.key==='Escape'){event.preventDefault();cancelEditList();}">${esc(l.desc||'')}</textarea>
       <div style="display:flex;gap:5px;flex-wrap:wrap;margin-top:7px;">${swatches}</div>
       <div style="display:flex;align-items:center;justify-content:space-between;gap:6px;margin-top:9px;">
-        <button onclick="askDeleteList(${l.id},event)" title="Obriši listu" aria-label="Obriši listu"
+        <button onclick="askDeleteList(${l.id},'${esc(l.name)}',event)" title="Obriši listu" aria-label="Obriši listu"
           style="background:none;border:none;cursor:pointer;color:var(--p-critical);padding:4px;border-radius:4px;display:flex;align-items:center;gap:4px;font-size:0.75rem;">
           <svg width="12" height="12" viewBox="0 0 12 12" fill="none"><path d="M2 2l8 8M10 2L2 10" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>
           Obriši
@@ -786,13 +815,11 @@ function saveEditList(id) {
   saveState(); renderDropdown();
 }
 
-function askDeleteList(id, e) {
+function askDeleteList(id, name, e) {
   e.stopPropagation();
-  const l = lists.find(x=>x.id===id);
-  if (!l) return;
   deleteListId = id; deleteTaskId = null; deleteSubtaskInfo = null;
   document.getElementById('confirm-title').textContent = 'Obriši listu';
-  document.getElementById('confirm-msg').textContent = `Sigurno želiš obrisati listu "${l.name}" i sve njene zadatke?`;
+  document.getElementById('confirm-msg').textContent = `Sigurno želiš obrisati listu "${name}" i sve njene zadatke?`;
   document.getElementById('confirm-overlay').classList.add('open');
 }
 function askDeleteTask() {
@@ -804,14 +831,11 @@ function askDeleteTask() {
   document.getElementById('confirm-msg').textContent = `Sigurno želiš obrisati zadatak "${t.name}"?`;
   document.getElementById('confirm-overlay').classList.add('open');
 }
-function askDeleteSubtask(taskId, subId, e) {
+function askDeleteSubtask(taskId, subId, text, e) {
   e.stopPropagation();
-  const t = findTaskById(taskId);
-  const s = t && Array.isArray(t.subtasks) ? t.subtasks.find(x=>x.id===subId) : null;
-  if (!s) return;
   deleteSubtaskInfo = { taskId, subId }; deleteListId = null; deleteTaskId = null;
   document.getElementById('confirm-title').textContent = 'Obriši podzadatak';
-  document.getElementById('confirm-msg').textContent = `Sigurno želiš obrisati podzadatak "${s.text}"?`;
+  document.getElementById('confirm-msg').textContent = `Sigurno želiš obrisati podzadatak "${text}"?`;
   document.getElementById('confirm-overlay').classList.add('open');
 }
 function closeConfirm() { document.getElementById('confirm-overlay').classList.remove('open'); deleteListId = null; deleteTaskId = null; deleteSubtaskInfo = null; }
@@ -1071,7 +1095,7 @@ function renderTasks() {
             <input class="inp" type="date" id="es-date-${s.id}" value="${esc(s.date||'')}" style="flex:1;height:30px;font-size:0.7812rem;min-width:110px;" title="Datum izvršenja" />
             <input class="inp" id="es-people-${s.id}" value="${esc(s.people||'')}" placeholder="Naziv..." style="flex:1;height:30px;font-size:0.7812rem;min-width:90px;"
               onkeydown="if(event.key==='Enter'){event.preventDefault();saveEditSubtask(${t.id},${s.id});} if(event.key==='Escape'){event.preventDefault();cancelEditSubtask();}" />
-            <button onclick="askDeleteSubtask(${t.id},${s.id},event)" title="Obriši podzadatak" aria-label="Obriši podzadatak"
+            <button onclick="askDeleteSubtask(${t.id},${s.id},'${esc(s.text)}',event)" title="Obriši podzadatak" aria-label="Obriši podzadatak"
               style="height:30px;padding:0 10px;background:none;border:none;color:var(--p-critical);cursor:pointer;flex-shrink:0;font-size:0.75rem;font-weight:500;">Obriši</button>
             <button onclick="cancelEditSubtask()" style="height:30px;padding:0 10px;border:1px solid var(--border);border-radius:var(--r-sm);background:transparent;color:var(--text-muted);font-size:0.75rem;cursor:pointer;flex-shrink:0;margin-left:auto;">Odustani</button>
             <button onclick="saveEditSubtask(${t.id},${s.id})" style="height:30px;padding:0 10px;background:var(--accent);color:#fff;border:none;border-radius:var(--r-sm);font-size:0.75rem;font-weight:500;cursor:pointer;flex-shrink:0;">Spremi</button>
@@ -1183,6 +1207,7 @@ auth.onAuthStateChanged(async (user) => {
     renderTasks();
     resolveDataReady();
     goHome();
+    cleanupOldBackups();
   } else {
     if (pwView) pwView.style.display = '';
   }
@@ -1193,6 +1218,87 @@ async function goHome() {
   document.getElementById('home-view').style.display = 'block';
   await dataReadyPromise;
   renderHomeReminders();
+}
+
+/* ── Sigurnosne kopije (automatski dnevni backup, čuva se 30 dana) ── */
+async function cleanupOldBackups() {
+  try {
+    const cutoff = isoOff(-30);
+    const snap = await backupsRef.where('date', '<', cutoff).get();
+    if (snap.empty) return;
+    const batch = db.batch();
+    snap.forEach(doc => batch.delete(doc.ref));
+    await batch.commit();
+  } catch (e) {
+    console.error('Čišćenje starih sigurnosnih kopija nije uspjelo:', e);
+  }
+}
+
+function openBackupPanel(e) {
+  if (e) e.stopPropagation();
+  document.getElementById('backup-overlay').classList.add('open');
+  renderBackupList();
+}
+function closeBackupPanel() {
+  document.getElementById('backup-overlay').classList.remove('open');
+}
+function backupOvClick(e) {
+  if (e.target === document.getElementById('backup-overlay')) closeBackupPanel();
+}
+
+async function renderBackupList() {
+  const el = document.getElementById('backup-list');
+  el.innerHTML = '<div style="padding:1rem;color:var(--text-faint);font-size:0.875rem;text-align:center;">Učitavanje…</div>';
+  try {
+    const snap = await backupsRef.orderBy('key', 'desc').get();
+    if (snap.empty) {
+      el.innerHTML = '<div style="padding:1rem;color:var(--text-faint);font-size:0.875rem;text-align:center;">Još nema spremljenih sigurnosnih kopija.</div>';
+      return;
+    }
+    const today = isoToday();
+    let html = '';
+    let lastDate = null;
+    snap.docs.forEach(doc => {
+      const d = doc.data();
+      if (d.date !== lastDate) {
+        lastDate = d.date;
+        const isToday = d.date === today;
+        html += `<div style="font-size:0.75rem;font-weight:600;color:var(--text-faint);text-transform:uppercase;letter-spacing:.03em;margin:${html?'10px':'0'} 0 2px;">${fmtD(d.date)}${isToday ? ' (danas)' : ''}</div>`;
+      }
+      html += `<div style="display:flex;align-items:center;justify-content:space-between;gap:10px;padding:8px 12px;border:1px solid var(--border);border-radius:var(--r-sm);background:var(--bg);">
+        <span style="font-size:0.9375rem;color:var(--text);">${d.hour}:00</span>
+        <button class="new-btn" style="background:var(--surface);color:var(--text);border:1px solid var(--border);padding:0 12px;height:30px;font-size:0.8125rem;" onclick="restoreBackup('${d.key}')">Vrati</button>
+      </div>`;
+    });
+    el.innerHTML = html;
+  } catch (e) {
+    el.innerHTML = '<div style="padding:1rem;color:var(--p-critical);font-size:0.875rem;text-align:center;">Greška pri učitavanju popisa kopija.</div>';
+  }
+}
+
+async function restoreBackup(key) {
+  const doc0 = await backupsRef.doc(key).get().catch(() => null);
+  const label = doc0 && doc0.exists ? `${fmtD(doc0.data().date)} u ${doc0.data().hour}:00` : key;
+  if (!confirm(`Vrati stanje na ${label}?\n\nTrenutno stanje svih lista i zadataka bit će zamijenjeno tom kopijom. Ova sigurnosna kopija ostaje sačuvana i dalje, pa se uvijek možeš vratiti i na drugi trenutak.`)) return;
+  try {
+    const doc = doc0 || await backupsRef.doc(key).get();
+    if (!doc.exists) { alert('Ta kopija više ne postoji (možda je istekla nakon 30 dana).'); return; }
+    const d = doc.data();
+    lists = Array.isArray(d.lists) ? d.lists : [];
+    data  = d.data && typeof d.data === 'object' ? d.data : {};
+    nListId = lists.length ? Math.max(...lists.map(l=>l.id))+1 : 1;
+    const all = Object.values(data).flat();
+    nTaskId = all.length ? Math.max(...all.map(t=>t.id))+1 : 1;
+    const allSubs = all.flatMap(t => Array.isArray(t.subtasks) ? t.subtasks : []);
+    nSubId = allSubs.length ? Math.max(...allSubs.map(s=>s.id))+1 : 1;
+    activeList = lists[0]?.id ?? null;
+    saveState();
+    renderDropdown();
+    renderTasks();
+    closeBackupPanel();
+  } catch (e) {
+    alert('Greška pri vraćanju sigurnosne kopije.');
+  }
 }
 
 function goToApp() {
